@@ -1,2 +1,2 @@
-# SO-shki
-сошки но с открытыми сурсами 
+# [LibAiEngine](https://github.com/coidarashka/LibAiEngine)
+паблик версия
