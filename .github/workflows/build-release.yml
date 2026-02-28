@@ -77,7 +77,7 @@ jobs:
       - name: Strip
         run: |
           STRIP=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
-          $STRIP --strip-unneeded $PROJ/build/libAiEngine.so
+          $STRIP --strip-debug $PROJ/build/libAiEngine.so
 
       - name: Verify no dynamic libomp
         run: |
