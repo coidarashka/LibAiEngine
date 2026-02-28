@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   NDK_VERSION: r26b
   NDK_HOME: ${{ github.workspace }}/../android-ndk
@@ -55,7 +58,6 @@ jobs:
           wget -q https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -O $PROJ/stb/stb_image.h
           wget -q https://raw.githubusercontent.com/nothings/stb/master/stb_image_write.h -O $PROJ/stb/stb_image_write.h
 
-
       - name: Build
         run: |
           mkdir -p $PROJ/build && cd $PROJ/build
@@ -71,6 +73,11 @@ jobs:
             -DFETCHCONTENT_SOURCE_DIR_KLEIDIAI_DOWNLOAD=$PROJ/kleidiai_source \
             -DBUILD_SHARED_LIBS=OFF
           make -j$(nproc) AiEngine
+
+      - name: Strip
+        run: |
+          STRIP=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
+          $STRIP --strip-unneeded $PROJ/build/libAiEngine.so
 
       - name: Verify no dynamic libomp
         run: |
