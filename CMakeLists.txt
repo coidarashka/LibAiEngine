@@ -31,6 +31,13 @@ target_include_directories(AiEngine PRIVATE
 target_link_options(AiEngine PRIVATE "-static-openmp" "-Wl,--exclude-libs,ALL")
 
 target_compile_options(AiEngine PRIVATE
-    -flto -funroll-loops -O3 -ffast-math -fopenmp -DGGML_FLASH_ATTN=ON)
+    -flto -O3 
+    -ffast-math 
+    -fopenmp 
+    -march=armv8.2-a+dotprod+fp16 # Важно для современных Android процессоров
+    -mcpu=generic
+    -DGGML_FLASH_ATTN=ON
+    -DGGML_USE_KLEIDIAI=ON
+)
 
 target_link_options(AiEngine PRIVATE -flto)
