@@ -36,7 +36,7 @@ static mtmd_context* g_mtmd_ctx = nullptr;
 static bool g_cancel_flag = false;
 
 extern "C" {
-    // Освобождение ресурсов (предотвращает краш при повторной загрузке)
+    // 1. Освобождение ресурсов
     void free_engine() {
         if (g_mtmd_ctx) { mtmd_free(g_mtmd_ctx); g_mtmd_ctx = nullptr; }
         if (g_sampler)  { llama_sampler_free(g_sampler); g_sampler = nullptr; }
@@ -44,25 +44,24 @@ extern "C" {
         if (g_model)    { llama_model_free(g_model); g_model = nullptr; }
         llama_backend_free();
         LOGD("Engine Resources Cleared");
+    }
 
+    // 2. Загрузка Vision (MMPROJ)
     int load_mmproj(const char* p) {
         if (!g_model) return -2;
-        LOGD("Vision adapter load requested: %s", p ? p : "none");
-        
-        // Если путь пустой или "none", ничего не делаем
         if (!p || strlen(p) == 0 || strcmp(p, "none") == 0) return 0;
 
         if (g_mtmd_ctx) mtmd_free(g_mtmd_ctx);
         
         mtmd_context_params params = mtmd_context_params_default();
-        params.use_gpu = false; // На андроиде лучше CPU для стабильности
-        params.image_max_tokens = g_conf.max_think_tokens; // Используем лимит из конфига
+        params.use_gpu = false; 
+        params.image_max_tokens = 128; // Фиксированный лимит для картинок
         
         g_mtmd_ctx = mtmd_init_from_file(p, g_model, params);
         return g_mtmd_ctx ? 0 : -1;
-    },
     }
 
+    // 3. Конфигурация параметров
     int configure_engine(const char* json_str) {
         try {
             auto j = json::parse(json_str);
@@ -79,8 +78,9 @@ extern "C" {
 
     void cancel_inference() { g_cancel_flag = true; }
 
+    // 4. Загрузка основной модели
     int load_model(const char* p) {
-        free_engine(); // Очищаем всё перед загрузкой новой модели
+        free_engine(); 
         llama_backend_init();
 
         llama_model_params mp = llama_model_default_params();
@@ -89,7 +89,7 @@ extern "C" {
         if (!g_model) return -1;
         g_vocab = llama_model_get_vocab(g_model);
 
-        // Адаптация контекста под модель
+        // Адаптивный контекст
         int model_train_ctx = llama_model_n_ctx_train(g_model);
         int final_ctx = (g_conf.n_ctx > 0) ? g_conf.n_ctx : std::min(model_train_ctx, 4096);
 
@@ -99,7 +99,7 @@ extern "C" {
         cp.n_threads_batch = g_conf.n_threads_batch;
         cp.n_batch         = g_conf.n_batch;
         
-        // Исправлено: используем enum flash_attn_type
+        // Flash Attention Fix
         cp.flash_attn_type = g_conf.flash_attn ? LLAMA_FLASH_ATTN_TYPE_ENABLED : LLAMA_FLASH_ATTN_TYPE_DISABLED;
 
         if (g_conf.kv_quant) {
@@ -115,27 +115,25 @@ extern "C" {
         llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(0.7f));
         llama_sampler_chain_add(g_sampler, llama_sampler_init_dist((uint32_t)time(NULL)));
 
-        LOGD("Model Loaded. Ctx: %d, FlashAttn: %d", final_ctx, g_conf.flash_attn);
+        LOGD("Engine Ready. Adaptive Context: %d", final_ctx);
         return 0;
     }
 
+    // 5. Инференс с логикой Think-лимитов
     typedef void (*cb_t)(const char*);
     int infer(const char* pr, const char* img, cb_t cb) {
         if (!g_ctx || !g_sampler) return -1;
         g_cancel_flag = false;
 
-        // Сброс состояния для новой генерации (защита от вылетов на 2-й раз)
         llama_sampler_reset(g_sampler);
         llama_memory_seq_rm(llama_get_memory(g_ctx), -1, -1, -1);
 
-        // Простая токенизация промпта
         std::vector<llama_token> tk(strlen(pr) + 16);
         int n = llama_tokenize(g_vocab, pr, strlen(pr), tk.data(), tk.size(), true, true);
         tk.resize(n);
         llama_decode(g_ctx, llama_batch_get_one(tk.data(), n));
 
         int think_tokens = 0;
-        int normal_tokens = 0;
         bool in_think_tag = false;
 
         for (int i = 0; i < g_conf.max_tokens; i++) {
@@ -149,19 +147,16 @@ extern "C" {
             if (n_p > 0) {
                 std::string piece(b, n_p);
 
-                // Логика Think-токенов
                 if (piece.find("<think>") != std::string::npos) in_think_tag = true;
                 
                 if (in_think_tag) {
                     think_tokens++;
                     if (think_tokens > g_conf.max_think_tokens) {
                         cb("\n[Think Limit Exceeded]\n");
-                        // Принудительно закрываем тег или выходим
-                        in_think_tag = false; 
-                        break; 
+                        // Прекращаем размышления, но продолжаем основной ответ
+                        in_think_tag = false;
+                        // Здесь можно либо сделать break, либо принудительно добавить </think>
                     }
-                } else {
-                    normal_tokens++;
                 }
 
                 cb(piece.c_str());
