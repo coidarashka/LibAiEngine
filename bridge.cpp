@@ -44,6 +44,23 @@ extern "C" {
         if (g_model)    { llama_model_free(g_model); g_model = nullptr; }
         llama_backend_free();
         LOGD("Engine Resources Cleared");
+
+    int load_mmproj(const char* p) {
+        if (!g_model) return -2;
+        LOGD("Vision adapter load requested: %s", p ? p : "none");
+        
+        // Если путь пустой или "none", ничего не делаем
+        if (!p || strlen(p) == 0 || strcmp(p, "none") == 0) return 0;
+
+        if (g_mtmd_ctx) mtmd_free(g_mtmd_ctx);
+        
+        mtmd_context_params params = mtmd_context_params_default();
+        params.use_gpu = false; // На андроиде лучше CPU для стабильности
+        params.image_max_tokens = g_conf.max_think_tokens; // Используем лимит из конфига
+        
+        g_mtmd_ctx = mtmd_init_from_file(p, g_model, params);
+        return g_mtmd_ctx ? 0 : -1;
+    },
     }
 
     int configure_engine(const char* json_str) {
