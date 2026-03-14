@@ -10,8 +10,7 @@
 #include <ctime>
 #include <csignal>
 
-// Подключаем STB Image для чтения картинок из файла в память пикселей
-#define STB_IMAGE_IMPLEMENTATION
+// ВНИМАНИЕ: Убрали #define STB_IMAGE_IMPLEMENTATION, так как реализация уже есть в mtmd-helper.cpp!
 #include "stb/stb_image.h"
 
 using json = nlohmann::json;
@@ -113,7 +112,7 @@ extern "C" {
         g_vocab = llama_model_get_vocab(g_model);
 
         int final_ctx = (g_conf.n_ctx > 0) ? g_conf.n_ctx : std::min(llama_model_n_ctx_train(g_model), 4096);
-        LOGD("Mandre: [load_model] Final Ctx: %d", final_ctx);
+        LOGD("Mandre:[load_model] Final Ctx: %d", final_ctx);
 
         llama_context_params cp = llama_context_default_params();
         cp.n_ctx           = final_ctx;
@@ -160,7 +159,7 @@ extern "C" {
         if (img && strlen(img) > 0 && strcmp(img, "none") != 0 && g_mtmd_ctx) {
             LOGD("Mandre: [Vision] Обнаружена картинка: %s", img);
             int w, h, c;
-            LOGD("Mandre: [Vision] Запуск STB_IMAGE (stbi_load)...");
+            LOGD("Mandre:[Vision] Запуск STB_IMAGE (stbi_load)...");
             unsigned char* data = stbi_load(img, &w, &h, &c, 3); // Принудительно 3 канала (RGB)
             
             if (data) {
@@ -175,7 +174,7 @@ extern "C" {
                     prompt_str = "<__media__>\n" + prompt_str;
                 }
             } else {
-                LOGE("Mandre: [Vision] КРИТИЧЕСКАЯ ОШИБКА STB! Невозможно прочитать файл: %s", img);
+                LOGE("Mandre:[Vision] КРИТИЧЕСКАЯ ОШИБКА STB! Невозможно прочитать файл: %s", img);
                 LOGE("Mandre: [Vision] Файл может быть битым, или путь передан не в формате файловой системы.");
             }
         }
@@ -277,7 +276,7 @@ extern "C" {
             std::vector<llama_token> tk(prompt_str.size() + 16);
             int n = llama_tokenize(g_vocab, prompt_str.c_str(), prompt_str.size(), tk.data(), tk.size(), true, true);
             tk.resize(n);
-            LOGD("Mandre: [infer] Промпт разбит на %d токенов", n);
+            LOGD("Mandre:[infer] Промпт разбит на %d токенов", n);
             process_text_tokens(tk.data(), n);
         }
         
